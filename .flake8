@@ -1,0 +1,25 @@
+[flake8]
+select =
+    B,  # bandit
+    B9,
+    BLK,
+    C,
+    E,  # pep8 errors and warnings
+    F,  # pyflakes
+    I,
+    S,  # bandit
+    W   # pep8 errors and warnings
+ignore =
+    B008,
+    B904,
+    E203,
+    E501,
+    E731,
+    I101,
+    S101,
+    W503,
+    C812,
+max-line-length = 120
+max-complexity = 15
+max-cognitive-complexity = 15
+import-order-style = google
