@@ -1,3 +1,9 @@
+"""Weather information fetching and formatting component.
+
+This module fetches current weather data for a specified city and formats it
+as Notion blocks with emoji representations of weather conditions.
+"""
+
 import python_weather
 
 # TODO: change symbols to more detailed ones
@@ -62,6 +68,14 @@ OW_WEATHER_SYMBOL = {
 
 
 def get_wind_arrow(deg: float) -> str:
+    """Convert wind direction in degrees to arrow emoji.
+
+    Args:
+        deg: Wind direction in degrees (0-360).
+
+    Returns:
+        Arrow emoji representing the wind direction.
+    """
     directions = [
         "↑",
         "↑",
@@ -85,6 +99,15 @@ def get_wind_arrow(deg: float) -> str:
 
 
 async def get_weather(city: str) -> list:
+    """Fetch weather data for a city and format as Notion blocks.
+
+    Args:
+        city: City name to fetch weather for.
+
+    Returns:
+        List of two Notion block dictionaries: header with weather emoji and
+        paragraph with detailed weather information.
+    """
     async with python_weather.Client(unit=python_weather.METRIC) as client:
         weather = await client.get(city)
 

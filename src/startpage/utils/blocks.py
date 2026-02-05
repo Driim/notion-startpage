@@ -1,4 +1,21 @@
+"""Notion block construction and manipulation utilities.
+
+This module provides helper functions for creating and appending Notion blocks
+to pages, with support for nested block hierarchies.
+"""
+
+
 async def append_block_to_page(notion, page_id: str, block: dict, after: str | None):
+    """Recursively append a block with children to a Notion page.
+
+    Separates parent blocks from their children and appends them hierarchically.
+
+    Args:
+        notion: Notion AsyncClient instance.
+        page_id: Notion page or block ID to append to.
+        block: Block dictionary with optional "children" key.
+        after: Optional block ID to insert after (for positioning).
+    """
     # Separate parent block and children
     parent_block = {k: v for k, v in block.items() if k != "children"}
     children_blocks = block.get("children", [])
@@ -19,6 +36,15 @@ async def append_block_to_page(notion, page_id: str, block: dict, after: str | N
 
 
 def create_header_1_block(text: str, children: list) -> dict:
+    """Create a toggleable heading_1 block with optional children.
+
+    Args:
+        text: Header text content.
+        children: List of child block dictionaries.
+
+    Returns:
+        Notion heading_1 block dictionary.
+    """
     block = {
         "type": "heading_1",
         "heading_1": {
@@ -34,4 +60,9 @@ def create_header_1_block(text: str, children: list) -> dict:
 
 
 def create_divider_block() -> dict:
+    """Create a divider block for visual separation.
+
+    Returns:
+        Notion divider block dictionary.
+    """
     return {"type": "divider", "divider": {}}

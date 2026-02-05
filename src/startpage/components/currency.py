@@ -1,9 +1,29 @@
+"""Currency and cryptocurrency rate fetching component.
+
+This module fetches exchange rates from a currency API and formats them as
+Notion blocks for display.
+"""
+
 import aiohttp
 
 
 async def get_currency_rates(
     text: str, base: str, targets: list[str], date: str | None = None
 ):
+    """Fetch currency exchange rates and format as Notion blocks.
+
+    Args:
+        text: Section header text for Notion display.
+        base: Base currency code (e.g., "rub", "usd").
+        targets: List of target currency codes to fetch rates for.
+        date: Optional date string for historical rates (YYYY-MM-DD format).
+
+    Returns:
+        List of Notion block dictionaries containing header and rate items.
+
+    Raises:
+        Exception: If API request fails.
+    """
     base = base.lower()
     if date:
         url = f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@{date}/v1/currencies/{base}.json"

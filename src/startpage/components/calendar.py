@@ -1,11 +1,33 @@
+"""iCloud calendar integration component.
+
+This module provides functionality to fetch today's events from iCloud calendars
+via CalDAV protocol and format them as Notion blocks.
+"""
+
+import logging
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
 import caldav
 import pytz
 
+logger = logging.getLogger(__name__)
+
 
 def fetch_icloud_calendars(username: str, password: str):
+    """Connect to iCloud CalDAV server and retrieve all calendars.
+
+    Args:
+        username: iCloud username (email).
+        password: iCloud app-specific password.
+
+    Returns:
+        List of CalDAV calendar objects.
+
+    Raises:
+        ValueError: If credentials are missing.
+        Exception: If connection to iCloud fails or no calendars found.
+    """
     if not username or not password:
         raise ValueError(
             "Missing iCloud credentials. Set ICLOUD_USERNAME and ICLOUD_APP_PASSWORD environment variables."
@@ -24,13 +46,24 @@ def fetch_icloud_calendars(username: str, password: str):
             raise Exception("No calendars found")
 
     except Exception as e:
-        print(f"Failed to connect to iCloud calendar: {e}")
+        logger.error(f"Failed to connect to iCloud calendar: {e}")
         raise
 
     return calendars
 
 
 def parse_event(event, name, start, end) -> dict | None:
+    """Parse CalDAV event object into standardized dictionary format.
+
+    Args:
+        event: CalDAV event object.
+        name: Calendar name.
+        start: Fallback start datetime for all-day events.
+        end: Fallback end datetime for all-day events.
+
+    Returns:
+        Dictionary with calendar, title, start, and end fields, or None if parsing fails.
+    """
     vobj = event.vobject_instance
     if vobj and hasattr(vobj, "vevent"):
         vevent = vobj.vevent
@@ -57,6 +90,17 @@ def parse_event(event, name, start, end) -> dict | None:
 async def get_icloud_calendar_events(
     text: str, username: str, password: str, timezone: str = "UTC"
 ):
+    """Fetch today's calendar events from iCloud and format as Notion blocks.
+
+    Args:
+        text: Section header text for Notion display.
+        username: iCloud username (email).
+        password: iCloud app-specific password.
+        timezone: Timezone string (default: "UTC").
+
+    Returns:
+        List of Notion block dictionaries containing header and event items.
+    """
     calendars = fetch_icloud_calendars(username, password)
 
     tz = pytz.timezone(timezone)
@@ -66,7 +110,7 @@ async def get_icloud_calendar_events(
 
     all_events = []
     for calendar in calendars:
-        print(f"Fetching events from calendar: {calendar.name}")
+        logger.info(f"Fetching events from calendar: {calendar.name}")
         try:
             events = calendar.search(start=start, end=end)
             for event in events:
@@ -74,7 +118,7 @@ async def get_icloud_calendar_events(
                 if parsed_event:
                     all_events.append(parsed_event)
         except Exception as e:
-            print(f"Error fetching events from {calendar.name}: {e}")
+            logger.error(f"Error fetching events from {calendar.name}: {e}")
 
     # Sort events by start time
     all_events.sort(key=lambda x: x["start"] if x["start"] else datetime.min)

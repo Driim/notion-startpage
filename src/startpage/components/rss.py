@@ -1,3 +1,11 @@
+"""RSS feed aggregation and article filtering component.
+
+This module provides functionality to fetch, parse, filter, and format RSS feed
+articles for display in Notion. It supports multiple feeds, priority-based sorting,
+tag-based filtering, and per-feed article limits.
+"""
+
+import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
@@ -6,6 +14,8 @@ from time import mktime, struct_time
 import feedparser
 import pytz
 
+logger = logging.getLogger(__name__)
+
 tz = pytz.timezone(os.getenv("TIMEZONE", "UTC"))
 now = datetime.now(tz)
 start_of_the_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -13,6 +23,14 @@ start_of_the_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
 @dataclass
 class Feed:
+    """Represents an RSS feed source.
+
+    Attributes:
+        name: Display name for the feed.
+        url: RSS feed URL.
+        priority: Feed priority (lower number = higher priority).
+    """
+
     name: str
     url: str
     priority: int
@@ -20,6 +38,20 @@ class Feed:
 
 @dataclass
 class Article:
+    """Represents a parsed RSS article.
+
+    Attributes:
+        feed: Source feed object.
+        title: Article title.
+        description: Short article summary.
+        full_text: Complete article content.
+        link: Article URL.
+        published: Publication datetime.
+        authors: List of author names.
+        tags: List of article tags.
+        priority: Inherited from feed priority.
+    """
+
     feed: Feed
     title: str
     description: str
@@ -32,6 +64,14 @@ class Article:
 
 
 def get_published_datetime(entry) -> datetime:
+    """Extract and parse publication datetime from RSS entry.
+
+    Args:
+        entry: RSS feed entry dictionary.
+
+    Returns:
+        Parsed datetime object, or current time if parsing fails.
+    """
     published_parsed = entry.get("published_parsed", None)
 
     if published_parsed and hasattr(published_parsed, "tm_year"):
@@ -44,6 +84,17 @@ def get_published_datetime(entry) -> datetime:
 def fetch_articles_from_feeds(
     feeds: list[Feed], banned_tags: set[str]
 ) -> list[Article]:
+    """Fetch and parse articles from multiple RSS feeds.
+
+    Filters out articles published before today and articles containing banned tags.
+
+    Args:
+        feeds: List of Feed objects to fetch from.
+        banned_tags: Set of lowercase tag strings to filter out.
+
+    Returns:
+        List of Article objects published today without banned tags.
+    """
     articles = []
 
     for feed in feeds:
@@ -96,6 +147,20 @@ def fetch_articles_from_feeds(
 async def fetch_feed(
     header: str, feeds: list[Feed], banned_tags: set[str], max_articles: int = 5
 ):
+    """Fetch, filter, and format RSS articles as Notion blocks.
+
+    Articles are sorted by priority and publication date. At most 2 articles
+    per feed are selected.
+
+    Args:
+        header: Section header text for Notion display.
+        feeds: List of Feed objects to aggregate.
+        banned_tags: Set of lowercase tags to filter out.
+        max_articles: Maximum number of articles to return (default: 5).
+
+    Returns:
+        List of Notion block dictionaries containing the header and article links.
+    """
     articles = []
 
     # TODO: Consider using aiohttp and async feedparser for concurrent fetching
@@ -126,7 +191,7 @@ async def fetch_feed(
 
     for article in selected_articles:
         text = f"[{article.feed.name}] {article.title}"
-        print(f"Selected article: {article.title} from feed: {article.feed.name}")
+        logger.info(f"Selected article: {article.title} from feed: {article.feed.name}")
         blocks.append(
             {
                 "type": "bulleted_list_item",

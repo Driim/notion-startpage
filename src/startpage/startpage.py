@@ -1,5 +1,13 @@
+"""StartPage application main orchestrator.
+
+This module coordinates fetching data from multiple sources (weather, calendar,
+currency, RSS feeds, and random facts) and publishes them to a Notion page as a
+daily summary.
+"""
+
 import asyncio
 import datetime
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -15,14 +23,38 @@ from startpage.utils.blocks import (
     create_header_1_block,
 )
 
+logger = logging.getLogger(__name__)
+
 
 async def main():
+    """Main entry point for StartPage application.
+
+    Orchestrates the following tasks concurrently:
+    - Fetches weather information for configured city
+    - Fetches currency and cryptocurrency rates
+    - Retrieves iCloud calendar events for today
+    - Aggregates RSS feed articles from multiple sources
+    - Fetches a random fact
+
+    All data is formatted as Notion blocks and appended to the configured
+    Notion page.
+
+    Raises:
+        ValueError: If required environment variables are not set.
+        Exception: If any component fails to fetch or process data.
+    """
     load_dotenv()
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    logger.info("Starting StartPage application")
     notion = AsyncClient(auth=os.environ["NOTION_TOKEN"])
-    page_id = os.environ["PAGE_ID"]
-    city = os.environ["CITY"]
-    block_id = os.environ["BLOCK_ID"]
+    page_id = os.environ.get("PAGE_ID")
+    city = os.environ.get("CITY")
+    block_id = os.environ.get("BLOCK_ID")
     if not city or not page_id or not block_id:
         raise ValueError("CITY, PAGE_ID, and BLOCK_ID must be set")
 
@@ -77,12 +109,14 @@ async def main():
         get_random_fact(),
     ]
 
+    logger.info("Fetching data from all sources concurrently")
     results = await asyncio.gather(*tasks)
 
     weather_block, currency_blocks, crypto_blocks, calendar_events, rss_block, fact = (
         results
     )
 
+    logger.info("All data fetched successfully, building Notion page")
     children = [*weather_block]
     children.extend(currency_blocks)
     children.extend(crypto_blocks)
@@ -90,10 +124,15 @@ async def main():
     children.extend(rss_block)
     new_day = create_header_1_block(formatted_date, children)
 
+    logger.info(f"Appending new day section: {formatted_date}")
     await append_block_to_page(notion, page_id, new_day, after=block_id)
+
+    logger.info("Updating fact block")
     await notion.blocks.update(
         block_id, callout={"rich_text": [{"text": {"content": fact}}]}
     )
+
+    logger.info("StartPage update completed successfully")
 
 
 if __name__ == "__main__":
