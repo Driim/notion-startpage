@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: StartPage - Daily Notion page updater
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+
+Parameters:
+  NotionToken:
+    Type: String
+    NoEcho: true
+    Description: Notion API token
+  PageId:
+    Type: String
+    Description: Notion page ID
+  BlockId:
+    Type: String
+    Description: Notion block ID for fact update
+  City:
+    Type: String
+    Default: London
+    Description: City for weather information
+  ICloudUsername:
+    Type: String
+    Description: iCloud username/email
+  ICloudAppPassword:
+    Type: String
+    NoEcho: true
+    Description: iCloud app-specific password
+  Timezone:
+    Type: String
+    Default: UTC
+    Description: Timezone for calendar events
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 6 * * ? *)'
+    Description: CloudWatch Events schedule expression (default runs daily at 6:00 AM UTC)
+
+Resources:
+  StartPageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_handler.lambda_handler
+      Description: Aggregates data and updates Notion page daily
+      Environment:
+        Variables:
+          NOTION_TOKEN: !Ref NotionToken
+          PAGE_ID: !Ref PageId
+          BLOCK_ID: !Ref BlockId
+          CITY: !Ref City
+          ICLOUD_USERNAME: !Ref ICloudUsername
+          ICLOUD_APP_PASSWORD: !Ref ICloudAppPassword
+          TIMEZONE: !Ref Timezone
+      Events:
+        DailySchedule:
+          Type: Schedule
+          Properties:
+            Schedule: !Ref ScheduleExpression
+            Description: Triggers StartPage update daily
+            Enabled: true
+
+  StartPageLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${StartPageFunction}'
+      RetentionInDays: 7
+
+Outputs:
+  StartPageFunction:
+    Description: StartPage Lambda Function ARN
+    Value: !GetAtt StartPageFunction.Arn
+  StartPageFunctionIamRole:
+    Description: IAM Role for StartPage Function
+    Value: !GetAtt StartPageFunctionRole.Arn

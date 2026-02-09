@@ -9,3 +9,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# AWS Lambda & SAM
+package.zip
+.aws-sam/
+samconfig.toml
+output.json

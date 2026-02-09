@@ -14,11 +14,11 @@ A Python application that aggregates data from multiple sources (weather, calend
 
 1. Install dependencies:
 
-```bash
-poetry install
-```
+   ```bash
+   poetry install
+   ```
 
-2. Configure environment variables in `.env`:
+1. Configure environment variables in `.env`:
 
 ```bash
 NOTION_TOKEN=your_notion_token
@@ -32,7 +32,7 @@ TIMEZONE=Europe/London  # Optional, defaults to UTC
 
 ## Usage
 
-### Run the application
+### Run locally
 
 #### Option 1: Using Poetry (recommended)
 
@@ -45,6 +45,24 @@ poetry run python -m startpage.startpage
 ```bash
 poetry run python run.py
 ```
+
+### Deploy to AWS Lambda
+
+StartPage can run as a scheduled AWS Lambda function. See [AWS Lambda Setup Guide](docs/AWS_LAMBDA_SETUP.md) for detailed instructions.
+
+Quick start:
+
+```bash
+# Deploy using AWS SAM
+sam deploy --guided
+
+# Or manually deploy
+poetry self add poetry-plugin-lambda-build
+poetry build-lambda
+aws lambda update-function-code --function-name startpage --zip-file fileb://package.zip
+```
+
+The GitHub Actions workflow automatically deploys to Lambda when PRs are merged to `main`.
 
 ## Development
 
