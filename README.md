@@ -53,13 +53,20 @@ StartPage can run as a scheduled AWS Lambda function. See [AWS Lambda Setup Guid
 Quick start:
 
 ```bash
-# Deploy using AWS SAM
-sam deploy --guided
-
-# Or manually deploy
+# Build the Lambda package
 poetry self add poetry-plugin-lambda-build
 poetry build-lambda
-aws lambda update-function-code --function-name startpage --zip-file fileb://package.zip
+
+# Upload to S3 and deploy via CloudFormation
+aws s3 cp package.zip s3://YOUR_BUCKET/startpage/package.zip
+aws cloudformation deploy \
+  --template-file template.yaml \
+  --stack-name startpage \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+    S3Bucket=YOUR_BUCKET \
+    NotionToken=... PageId=... BlockId=... \
+    City=London ICloudUsername=... ICloudAppPassword=... Timezone=UTC
 ```
 
 The GitHub Actions workflow automatically deploys to Lambda when PRs are merged to `main`.

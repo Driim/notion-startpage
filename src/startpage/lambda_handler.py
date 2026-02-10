@@ -6,12 +6,6 @@ Environment variables are automatically loaded from Lambda configuration.
 
 import asyncio
 import logging
-import sys
-from pathlib import Path
-
-# Add src to Python path for Lambda execution
-src_path = Path(__file__).parent / "src"
-sys.path.insert(0, str(src_path))
 
 from startpage.startpage import main
 
@@ -32,19 +26,18 @@ def lambda_handler(event, context):
         Exception: If the StartPage main function fails
     """
     try:
-        logger.info(f"Lambda function invoked. Request ID: {context.request_id}")
+        logger.info(f"Lambda function invoked. Request ID: {context.aws_request_id}")
 
-        # Run the async main function
         asyncio.run(main())
 
         logger.info("StartPage execution completed successfully")
         return {
             "statusCode": 200,
-            "body": "StartPage updated successfully"
+            "body": "StartPage updated successfully",
         }
     except Exception as e:
         logger.error(f"Error executing StartPage: {str(e)}", exc_info=True)
         return {
             "statusCode": 500,
-            "body": f"Error: {str(e)}"
+            "body": f"Error: {str(e)}",
         }

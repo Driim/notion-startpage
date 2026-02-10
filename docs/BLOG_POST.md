@@ -17,6 +17,7 @@ The best part? It runs completely serverless on AWS Lambda, costing virtually no
 - Python 3.12 with asyncio for concurrent data fetching
 - Notion API for publishing content
 - AWS Lambda for serverless execution
+- AWS CloudFormation for infrastructure as code
 - AWS EventBridge for daily scheduling
 - GitHub Actions for CI/CD
 
@@ -33,6 +34,8 @@ StartPage is a Python application that:
 4. Updates a "fact of the day" callout block
 
 The architecture is simple yet powerful:
+
+**Runtime:**
 ```
 ┌─────────────────┐
 │  EventBridge    │  Triggers daily at 6 AM UTC
@@ -56,6 +59,25 @@ The architecture is simple yet powerful:
 ┌─────────────────┐
 │   Notion API    │  Publishes formatted blocks
 └─────────────────┘
+```
+
+**Deployment:**
+```
+┌─────────────────┐     ┌─────────────────┐
+│ GitHub Actions  │────▶│   S3 Bucket     │  Stores package.zip
+│ (CI/CD)         │     └────────┬────────┘
+└────────┬────────┘              │
+         │                       ▼
+         │              ┌─────────────────┐
+         └─────────────▶│ CloudFormation  │  Deploys infrastructure
+                        │ (IaC)           │
+                        └────────┬────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              ┌──────────┐ ┌──────────┐ ┌──────────┐
+              │  Lambda  │ │EventBridge│ │CloudWatch│
+              └──────────┘ └──────────┘ └──────────┘
 ```
 
 The entire execution takes about 10-15 seconds, well within Lambda's free tier limits.
@@ -135,6 +157,9 @@ TIMEZONE=Europe/London                        # IANA timezone
 # iCloud Calendar (for calendar events)
 ICLOUD_USERNAME=your.email@icloud.com
 ICLOUD_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx      # See below
+
+# AWS Deployment (needed for `make deploy`)
+S3_BUCKET=your-startpage-bucket              # S3 bucket for Lambda package
 ```
 
 ### Getting iCloud App-Specific Password
@@ -161,6 +186,7 @@ Before proceeding, verify you have:
 - ✅ Your timezone
 - ✅ iCloud username
 - ✅ iCloud app-specific password
+- ✅ S3 bucket name (for AWS deployment)
 
 ---
 
@@ -225,41 +251,40 @@ Open your Notion page and you should see:
 
 ---
 
-## Part 5: Deploying with AWS SAM
+## Part 5: Deploying with CloudFormation
 
 Now let's deploy StartPage to AWS Lambda so it runs automatically every day.
 
-### Step 1: Install AWS SAM CLI
+### Step 1: Install AWS CLI
 
 **macOS:**
 ```bash
-brew install aws-sam-cli
+brew install awscli
 ```
 
 **Linux/Windows:**
-Follow the [official installation guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
+Follow the [official installation guide](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html)
 
 **Verify installation:**
 ```bash
-sam --version
-# Should output: SAM CLI, version 1.x.x
+aws --version
 ```
 
 ### Step 2: Configure AWS Credentials
-
-If you haven't already, configure your AWS credentials:
 
 ```bash
 aws configure
 ```
 
 You'll be prompted for:
+
 - AWS Access Key ID
 - AWS Secret Access Key
 - Default region (e.g., `us-east-1`)
 - Output format (just press Enter for default)
 
 **Don't have AWS credentials?**
+
 1. Log into [AWS Console](https://console.aws.amazon.com)
 2. Go to IAM → Users
 3. Click "Add users"
@@ -267,75 +292,69 @@ You'll be prompted for:
 5. Attach "AdministratorAccess" policy (or create a custom policy)
 6. Save the Access Key ID and Secret Access Key
 
-### Step 3: Deploy with SAM
+### Step 3: Create an S3 Bucket
 
-From your project directory:
+You need an S3 bucket to store the Lambda deployment package:
 
 ```bash
-sam deploy --guided
+aws s3 mb s3://your-startpage-bucket --region us-east-1
 ```
 
-You'll be prompted with several questions:
+### Step 4: Build and Upload the Lambda Package
 
-**Stack Name:** `startpage`
-Press Enter to use the default
+```bash
+# Install the Lambda build plugin (one-time setup)
+poetry self add poetry-plugin-lambda-build
 
-**AWS Region:** `us-east-1`
-Or your preferred region
+# Build the deployment package
+poetry build-lambda
 
-**NotionToken:**
-Paste your Notion integration token (it won't be visible while typing)
-
-**PageId:**
-Paste your Notion page ID (no hyphens)
-
-**BlockId:**
-Paste your callout block ID (no hyphens)
-
-**City:** `London`
-Or your preferred city
-
-**ICloudUsername:**
-Your iCloud email address
-
-**ICloudAppPassword:**
-Your iCloud app-specific password
-
-**Timezone:** `Europe/London`
-Your IANA timezone
-
-**ScheduleExpression:** `cron(0 6 * * ? *)`
-Press Enter to use default (daily at 6 AM UTC)
-
-**Confirm changes before deploy:** `Y`
-
-**Allow SAM CLI IAM role creation:** `Y`
-
-**Disable rollback:** `N`
-
-**Save arguments to configuration file:** `Y`
-
-**SAM configuration file:** `samconfig.toml`
-Press Enter
-
-**SAM configuration environment:** `default`
-Press Enter
-
-SAM will then:
-1. Create a CloudFormation stack
-2. Build your Lambda deployment package
-3. Create an S3 bucket for artifacts
-4. Deploy your Lambda function
-5. Create an EventBridge schedule
-6. Set up CloudWatch logs
-
-This process takes 2-3 minutes. When complete, you'll see:
-
+# Upload to S3
+aws s3 cp package.zip s3://your-startpage-bucket/startpage/package.zip
 ```
+
+### Step 5: Deploy with CloudFormation
+
+The project includes a `template.yaml` that defines all AWS resources: Lambda function, IAM role, EventBridge schedule, and CloudWatch log group.
+
+```bash
+aws cloudformation deploy \
+  --template-file template.yaml \
+  --stack-name startpage \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides \
+    S3Bucket=your-startpage-bucket \
+    S3Key=startpage/package.zip \
+    NotionToken=secret_xxx \
+    PageId=your_page_id \
+    BlockId=your_block_id \
+    City=London \
+    ICloudUsername=your@icloud.com \
+    ICloudAppPassword=xxxx-xxxx-xxxx-xxxx \
+    Timezone=Europe/London \
+    ScheduleExpression='cron(0 6 * * ? *)'
+```
+
+This creates the entire infrastructure in one command. CloudFormation will:
+
+1. Create an IAM role with basic Lambda execution permissions
+2. Deploy your Lambda function with the code from S3
+3. Create an EventBridge rule to trigger the function daily
+4. Set up CloudWatch log group with 7-day retention
+
+**Alternatively**, if you have your `.env` file configured with all the variables (including `S3_BUCKET`), you can use the Makefile shortcut which handles building, uploading to S3, and deploying in one command:
+
+```bash
+make deploy
+```
+
+The process takes 2-3 minutes. When complete, you'll see:
+
+```text
 Successfully created/updated stack - startpage in us-east-1
 ```
 
-### Step 4: Test Your Lambda Function
+### Step 6: Test Your Lambda Function
 
 Invoke your function manually to verify it works:
 
@@ -360,7 +379,7 @@ You should see:
 
 Check your Notion page - you should see a new daily entry!
 
-### Step 5: Monitor Execution
+### Step 7: Monitor Execution
 
 View your Lambda logs:
 
@@ -373,24 +392,25 @@ aws logs tail /aws/lambda/startpage --follow
 ```
 
 Or use the AWS Console:
+
 1. Go to CloudWatch → Log groups
 2. Find `/aws/lambda/startpage`
 3. Browse execution logs
 
 ### Adjusting the Schedule
 
-To run at a different time, update the cron expression in `template.yaml`:
+To run at a different time, redeploy with a new `ScheduleExpression`:
 
-```yaml
-ScheduleExpression: 'cron(0 8 * * ? *)'  # 8 AM UTC
-```
-
-Then redeploy:
 ```bash
-sam deploy
+aws cloudformation deploy \
+  --template-file template.yaml \
+  --stack-name startpage \
+  --capabilities CAPABILITY_IAM \
+  --parameter-overrides ScheduleExpression='cron(0 8 * * ? *)' ...
 ```
 
 **Common schedules:**
+
 - `cron(0 6 * * ? *)` - Daily at 6 AM UTC
 - `cron(0 */6 * * ? *)` - Every 6 hours
 - `cron(0 8 * * MON *)` - Every Monday at 8 AM UTC
@@ -417,41 +437,18 @@ Now let's set up automatic deployments so every time you push changes to the `ma
 
 ### Step 2: Create IAM User for GitHub Actions
 
-Create a dedicated IAM user with limited permissions for deployments:
+Create a dedicated IAM user with permissions for S3 upload and CloudFormation deployment. See [AWS Lambda Setup Guide](AWS_LAMBDA_SETUP.md#get-aws-credentials-for-github-actions) for the full IAM policy.
+
+Quick version:
 
 ```bash
-# Create IAM policy
-cat > lambda-deploy-policy.json << 'EOF'
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "lambda:UpdateFunctionCode",
-        "lambda:GetFunction"
-      ],
-      "Resource": "arn:aws:lambda:*:*:function:startpage"
-    }
-  ]
-}
-EOF
-
-# Create the policy
-aws iam create-policy \
-  --policy-name StartPageLambdaDeployPolicy \
-  --policy-document file://lambda-deploy-policy.json
-
 # Create IAM user
 aws iam create-user --user-name github-actions-startpage
 
-# Get your AWS account ID
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-
-# Attach policy to user
+# Attach AdministratorAccess for simplicity (or use the fine-grained policy from the setup guide)
 aws iam attach-user-policy \
   --user-name github-actions-startpage \
-  --policy-arn "arn:aws:iam::${ACCOUNT_ID}:policy/StartPageLambdaDeployPolicy"
+  --policy-arn arn:aws:iam::aws:policy/AdministratorAccess
 
 # Create access key
 aws iam create-access-key --user-name github-actions-startpage
@@ -467,11 +464,18 @@ Save the **AccessKeyId** and **SecretAccessKey** from the output!
 4. Add these secrets one by one:
 
 | Secret Name | Value | Example |
-|------------|-------|---------|
+| ----------- | ----- | ------- |
 | `AWS_ACCESS_KEY_ID` | From IAM user creation | `AKIA...` |
 | `AWS_SECRET_ACCESS_KEY` | From IAM user creation | `wJalrX...` |
 | `AWS_REGION` | Your Lambda region | `us-east-1` |
-| `LAMBDA_FUNCTION_NAME` | Your function name | `startpage` |
+| `S3_BUCKET` | S3 bucket for deployment package | `your-startpage-bucket` |
+| `NOTION_TOKEN` | Notion API token | `secret_xxx` |
+| `PAGE_ID` | Notion page ID | `abc123def456` |
+| `BLOCK_ID` | Notion block ID | `xyz789abc123` |
+| `CITY` | City for weather | `London` |
+| `ICLOUD_USERNAME` | iCloud email | `you@icloud.com` |
+| `ICLOUD_APP_PASSWORD` | iCloud app password | `xxxx-xxxx-xxxx-xxxx` |
+| `TIMEZONE` | IANA timezone | `Europe/London` |
 
 **To add each secret:**
 1. Click "New repository secret"
@@ -485,14 +489,13 @@ The GitHub Actions workflow (`.github/workflows/deploy-lambda.yml`) runs when:
 - A pull request is **merged** into the `main` branch
 
 It performs these steps:
+
 1. ✅ Checks out the code
 2. ✅ Sets up Python 3.12
-3. ✅ Installs Poetry
-4. ✅ Installs the Lambda build plugin
-5. ✅ Installs project dependencies
-6. ✅ Builds a Lambda-compatible deployment package
-7. ✅ Configures AWS credentials
-8. ✅ Uploads the package to your Lambda function
+3. ✅ Installs Poetry and the Lambda build plugin
+4. ✅ Builds a Lambda-compatible deployment package
+5. ✅ Uploads `package.zip` to S3 with an MD5 hash suffix for versioning (e.g., `package-a1b2c3d4.zip`)
+6. ✅ Deploys the CloudFormation stack (creates/updates Lambda, EventBridge, IAM role)
 
 ### Step 5: Test the CI/CD Pipeline
 
@@ -573,7 +576,7 @@ From now on, whenever you want to update your StartPage:
 Edit `src/startpage/startpage.py`, modify the `feeds` list, create a PR, merge.
 
 **Change schedule:**
-Edit `template.yaml`, update `ScheduleExpression`, create a PR, merge.
+Update the `ScheduleExpression` parameter in the CloudFormation deploy step in `.github/workflows/deploy-lambda.yml`, create a PR, merge. For local deployments, you can also pass a custom schedule via `make deploy` or directly to `aws cloudformation deploy`.
 
 **Update Python version:**
 Edit both `.github/workflows/deploy-lambda.yml` and `template.yaml`, create a PR, merge.
@@ -617,7 +620,7 @@ With the default daily schedule:
 - **Lambda:** 30 executions/month × 15 seconds = 7.5 minutes/month ✅ FREE (1M requests, 400K GB-seconds free)
 - **EventBridge:** 30 invocations/month ✅ FREE (< 1M invocations)
 - **CloudWatch Logs:** ~50 MB/month ✅ FREE (5 GB ingestion, 7-day retention)
-- **S3 (SAM artifacts):** < 1 MB ✅ FREE (5 GB storage)
+- **S3 (deployment package):** < 50 MB ✅ FREE (5 GB storage)
 
 **Total monthly cost: $0.00** 🎉
 
@@ -626,7 +629,7 @@ With the default daily schedule:
 - [GitHub Repository](https://github.com/Driim/notion-startpage)
 - [Notion API Documentation](https://developers.notion.com)
 - [AWS Lambda Documentation](https://docs.aws.amazon.com/lambda/)
-- [AWS SAM Documentation](https://docs.aws.amazon.com/serverless-application-model/)
+- [AWS CloudFormation Documentation](https://docs.aws.amazon.com/cloudformation/)
 
 ### Share Your Dashboard
 

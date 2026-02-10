@@ -1,14 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
 Description: StartPage - Daily Notion page updater
-
-Globals:
-  Function:
-    Timeout: 300
-    MemorySize: 512
-    Runtime: python3.12
-    Architectures:
-      - x86_64
 
 Parameters:
   NotionToken:
@@ -39,15 +30,43 @@ Parameters:
   ScheduleExpression:
     Type: String
     Default: 'cron(0 6 * * ? *)'
-    Description: CloudWatch Events schedule expression (default runs daily at 6:00 AM UTC)
+    Description: EventBridge schedule expression (default daily at 6:00 AM UTC)
+  S3Bucket:
+    Type: String
+    Description: S3 bucket containing the Lambda deployment package
+  S3Key:
+    Type: String
+    Default: startpage/package.zip
+    Description: S3 key for the Lambda deployment package
 
 Resources:
-  StartPageFunction:
-    Type: AWS::Serverless::Function
+  StartPageFunctionRole:
+    Type: AWS::IAM::Role
     Properties:
-      CodeUri: .
-      Handler: lambda_handler.lambda_handler
-      Description: Aggregates data and updates Notion page daily
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  StartPageFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: startpage
+      Handler: startpage.lambda_handler.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - arm64
+      Timeout: 300
+      MemorySize: 512
+      Role: !GetAtt StartPageFunctionRole.Arn
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
       Environment:
         Variables:
           NOTION_TOKEN: !Ref NotionToken
@@ -57,13 +76,24 @@ Resources:
           ICLOUD_USERNAME: !Ref ICloudUsername
           ICLOUD_APP_PASSWORD: !Ref ICloudAppPassword
           TIMEZONE: !Ref Timezone
-      Events:
-        DailySchedule:
-          Type: Schedule
-          Properties:
-            Schedule: !Ref ScheduleExpression
-            Description: Triggers StartPage update daily
-            Enabled: true
+
+  ScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Triggers StartPage update daily
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt StartPageFunction.Arn
+          Id: StartPageTarget
+
+  SchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StartPageFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduleRule.Arn
 
   StartPageLogGroup:
     Type: AWS::Logs::LogGroup
@@ -72,9 +102,9 @@ Resources:
       RetentionInDays: 7
 
 Outputs:
-  StartPageFunction:
+  StartPageFunctionArn:
     Description: StartPage Lambda Function ARN
     Value: !GetAtt StartPageFunction.Arn
-  StartPageFunctionIamRole:
+  StartPageFunctionRoleArn:
     Description: IAM Role for StartPage Function
     Value: !GetAtt StartPageFunctionRole.Arn
