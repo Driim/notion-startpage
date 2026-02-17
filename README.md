@@ -4,7 +4,7 @@ A Python application that aggregates data from multiple sources (weather, calend
 
 ## Features
 
-- 🌤️ **Weather** - Current weather information for any city
+- 🌤️ **Weather** - Current weather information for any city (powered by Open-Meteo API - free, no API key required)
 - 📅 **Calendar** - Today's events from iCloud calendar
 - 💱 **Currency & Crypto** - Exchange rates for currencies and cryptocurrencies
 - 📰 **RSS Feeds** - Aggregated tech news from multiple sources

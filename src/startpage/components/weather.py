@@ -4,66 +4,41 @@ This module fetches current weather data for a specified city and formats it
 as Notion blocks with emoji representations of weather conditions.
 """
 
-import python_weather
+import logging
 
-# TODO: change symbols to more detailed ones
-WEATHER_SYMBOL = {
-    "UNKNOWN": "✨",
-    "CLOUDY": "☁️",
-    "FOG": "🌫",
-    "HEAVY_RAIN": "🌧",
-    "HEAVY_SHOWERS": "🌧",
-    "HEAVY_SNOW": "❄️",
-    "HEAVY_SNOW_SHOWERS": "❄️",
-    "LIGHT_RAIN": "🌦",
-    "LIGHT_SHOWERS": "🌦",
-    "LIGHT_SLEET": "🌧",
-    "LIGHT_SLEET_SHOWERS": "🌧",
-    "LIGHT_SNOW": "🌨",
-    "LIGHT_SNOW_SHOWERS": "🌨",
-    "PARTLY_CLOUDY": "⛅️",
-    "SUNNY": "☀️",
-    "THUNDERY_HEAVY_RAIN": "🌩",
-    "THUNDERY_SHOWERS": "⛈",
-    "THUNDERY_SNOW_SHOWERS": "⛈",
-    "VERY_CLOUDY": "☁️",
-}
+import aiohttp
 
-# TODO: change colors based on directions
-WIND_ARROWS = {
-    "NORTH": "↑",
-    "NORTH_NORTHEAST": "↑",
-    "NORTHEAST": "↗",
-    "EAST_NORTHEAST": "↗",
-    "EAST": "→",
-    "EAST_SOUTHEAST": "↘",
-    "SOUTHEAST": "↘",
-    "SOUTH_SOUTHEAST": "↘",
-    "SOUTH": "↓",
-    "SOUTH_SOUTHWEST": "↙",
-    "SOUTHWEST": "↙",
-    "WEST_SOUTHWEST": "↙",
-    "WEST": "←",
-    "WEST_NORTHWEST": "↖",
-    "NORTHWEST": "↖",
-    "NORTH_NORTHWEST": "↖",
-}
+logger = logging.getLogger(__name__)
 
-OW_WEATHER_SYMBOL = {
-    "Clear": "☀️",
-    "Clouds": "☁️",
-    "Rain": "🌧",
-    "Drizzle": "🌦",
-    "Thunderstorm": "⛈",
-    "Snow": "❄️",
-    "Mist": "🌫",
-    "Fog": "🌫",
-    "Haze": "🌫",
-    "Dust": "🌫",
-    "Sand": "🌫",
-    "Ash": "🌫",
-    "Squall": "🌬",
-    "Tornado": "🌪",
+WMO_WEATHER_SYMBOL = {
+    0: "☀️",
+    1: "🌤",
+    2: "⛅️",
+    3: "☁️",
+    45: "🌫",
+    48: "🌫",
+    51: "🌦",
+    53: "🌦",
+    55: "🌧",
+    56: "🌧",
+    57: "🌧",
+    61: "🌦",
+    63: "🌧",
+    65: "🌧",
+    66: "🌧",
+    67: "🌧",
+    71: "🌨",
+    73: "❄️",
+    75: "❄️",
+    77: "❄️",
+    80: "🌦",
+    81: "🌧",
+    82: "🌧",
+    85: "🌨",
+    86: "❄️",
+    95: "⛈",
+    96: "⛈",
+    99: "⛈",
 }
 
 
@@ -98,6 +73,38 @@ def get_wind_arrow(deg: float) -> str:
     return directions[index]
 
 
+async def get_coordinates(city: str) -> tuple[float, float]:
+    """Convert city name to latitude/longitude coordinates using Open-Meteo Geocoding API.
+
+    Args:
+        city: City name to geocode.
+
+    Returns:
+        Tuple of (latitude, longitude) coordinates.
+
+    Raises:
+        ValueError: If city is not found.
+        aiohttp.ClientError: If network request fails.
+    """
+    geocoding_url = "https://geocoding-api.open-meteo.com/v1/search"
+    params = {"name": city, "count": 1, "language": "en", "format": "json"}
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(geocoding_url, params=params) as response:
+            response.raise_for_status()
+            data = await response.json()
+
+            if not data.get("results"):
+                logger.error(f"City not found: {city}")
+                raise ValueError(f"City not found: {city}")
+
+            result = data["results"][0]
+            latitude = result["latitude"]
+            longitude = result["longitude"]
+            logger.info(f"Geocoded {city} to coordinates: {latitude}, {longitude}")
+            return latitude, longitude
+
+
 async def get_weather(city: str) -> list:
     """Fetch weather data for a city and format as Notion blocks.
 
@@ -107,35 +114,78 @@ async def get_weather(city: str) -> list:
     Returns:
         List of two Notion block dictionaries: header with weather emoji and
         paragraph with detailed weather information.
+
+    Raises:
+        ValueError: If city is not found.
+        aiohttp.ClientError: If API request fails.
     """
-    async with python_weather.Client(unit=python_weather.METRIC) as client:
-        weather = await client.get(city)
+    try:
+        latitude, longitude = await get_coordinates(city)
 
-        today = weather.daily_forecasts[0]
-        weather_symbol = WEATHER_SYMBOL.get(weather.kind.name, "❓")
-        wind_arrow = WIND_ARROWS.get(weather.wind_direction.name, "?")
-        weather_info = f"{today.lowest_temperature}°C - {today.highest_temperature}°C "
-        weather_info += (
-            f"Humidity: {weather.humidity}% Precipitation: {weather.precipitation}mm "
-        )
-        weather_info += f"Wind: {weather.wind_speed}km/h {wind_arrow}"
+        weather_url = "https://api.open-meteo.com/v1/forecast"
+        params = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": "temperature_2m,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_direction_10m",
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "timezone": "auto",
+        }
 
-        return [
-            {
-                "type": "heading_2",
-                "heading_2": {
-                    "rich_text": [
-                        {
-                            "type": "text",
-                            "text": {"content": f"{weather_symbol} {city}"},
-                        }
-                    ]
-                },
-            },
-            {
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": weather_info}}]
-                },
-            },
-        ]
+        async with aiohttp.ClientSession() as session:
+            async with session.get(weather_url, params=params) as response:
+                response.raise_for_status()
+                data = await response.json()
+
+                current = data["current"]
+                daily = data["daily"]
+
+                weather_code = current["weather_code"]
+                weather_symbol = WMO_WEATHER_SYMBOL.get(weather_code, "❓")
+
+                wind_direction_deg = current["wind_direction_10m"]
+                wind_arrow = get_wind_arrow(wind_direction_deg)
+
+                lowest_temp = int(daily["temperature_2m_min"][0])
+                highest_temp = int(daily["temperature_2m_max"][0])
+                humidity = int(current["relative_humidity_2m"])
+                precipitation = current["precipitation"]
+                wind_speed = int(current["wind_speed_10m"])
+
+                weather_info = f"{lowest_temp}°C - {highest_temp}°C "
+                weather_info += (
+                    f"Humidity: {humidity}% Precipitation: {precipitation}mm "
+                )
+                weather_info += f"Wind: {wind_speed}km/h {wind_arrow}"
+
+                logger.info(f"Successfully fetched weather for {city}")
+
+                return [
+                    {
+                        "type": "heading_2",
+                        "heading_2": {
+                            "rich_text": [
+                                {
+                                    "type": "text",
+                                    "text": {"content": f"{weather_symbol} {city}"},
+                                }
+                            ]
+                        },
+                    },
+                    {
+                        "type": "paragraph",
+                        "paragraph": {
+                            "rich_text": [
+                                {"type": "text", "text": {"content": weather_info}}
+                            ]
+                        },
+                    },
+                ]
+    except ValueError as e:
+        logger.error(f"Error fetching weather for {city}: {e}")
+        raise
+    except aiohttp.ClientError as e:
+        logger.error(f"Network error fetching weather for {city}: {e}")
+        raise
+    except KeyError as e:
+        logger.error(f"Unexpected API response format for {city}: {e}")
+        raise ValueError(f"Invalid API response: missing field {e}")

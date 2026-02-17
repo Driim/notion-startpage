@@ -1,7 +1,8 @@
 """Tests for Notion block utilities."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from src.startpage.utils.blocks import (
     append_block_to_page,

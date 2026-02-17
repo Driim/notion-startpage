@@ -1,9 +1,10 @@
 """Tests for RSS feed component."""
 
-import pytest
 from datetime import datetime
 from time import struct_time
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.startpage.components.rss import (
     Article,
