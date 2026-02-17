@@ -1,0 +1,5 @@
+{
+  "setup_script": "poetry install",
+  "verification_script": "poetry run pytest",
+  "copy_files": [".env"]
+}
