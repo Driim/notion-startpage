@@ -95,6 +95,16 @@ async def main():
             url="https://pragmaticengineer.com/feed/",
             priority=1,
         ),
+        Feed(
+            name="Peter Steinberger",
+            url="https://steipete.me/rss.xml",
+            priority=1,
+        ),
+        Feed(
+            name="Mario Zechner",
+            url="https://mariozechner.at/rss.xml",
+            priority=1,
+        ),
     ]
     banned_tags = {"sponsored", "advertisement", "government & policy", "smartglasses"}
 
