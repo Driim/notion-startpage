@@ -70,13 +70,13 @@ async def main():
 
     feeds = [
         Feed(name="TechCrunch", url="https://techcrunch.com/feed/", priority=2),
-        Feed(name="BigThinking", url="https://bigthinking.io/feed", priority=1),
-        Feed(name="Product Hunt", url="https://www.producthunt.com/feed", priority=2),
-        Feed(
-            name="Hacker News Launches",
-            url="https://news.ycombinator.com/launches",
-            priority=1,
-        ),
+        # Feed(name="BigThinking", url="https://bigthinking.io/feed", priority=1),
+        # Feed(name="Product Hunt", url="https://www.producthunt.com/feed", priority=2),
+        # Feed(
+        #     name="Hacker News Launches",
+        #     url="https://news.ycombinator.com/launches",
+        #     priority=1,
+        # ),
         Feed(
             name="Andrew Chen", url="https://andrewchen.substack.com/feed", priority=1
         ),
@@ -87,12 +87,12 @@ async def main():
         ),
         Feed(
             name="Irrational Exuberance",
-            url="https://irrationalexuberance.libsyn.com/rss",
+            url="https://lethain.com/feeds/",
             priority=1,
         ),
         Feed(
             name="Pragmatic Engineer",
-            url="https://pragmaticengineer.com/feed/",
+            url="https://blog.pragmaticengineer.com/feed/",
             priority=1,
         ),
         Feed(
