@@ -1,6 +1,6 @@
 """StartPage application main orchestrator.
 
-This module coordinates fetching data from multiple sources (weather, calendar,
+This module coordinates fetching data from multiple sources (calendar,
 currency, RSS feeds, and random facts) and publishes them to a Notion page as a
 daily summary.
 """
@@ -17,7 +17,6 @@ from startpage.components.calendar import get_icloud_calendar_events
 from startpage.components.currency import get_currency_rates
 from startpage.components.fact import get_random_fact
 from startpage.components.rss import Feed, fetch_feed
-from startpage.components.weather import get_weather
 from startpage.utils.blocks import (
     append_block_to_page,
     create_header_1_block,
@@ -30,7 +29,6 @@ async def main():
     """Main entry point for StartPage application.
 
     Orchestrates the following tasks concurrently:
-    - Fetches weather information for configured city
     - Fetches currency and cryptocurrency rates
     - Retrieves iCloud calendar events for today
     - Aggregates RSS feed articles from multiple sources
@@ -53,10 +51,9 @@ async def main():
     logger.info("Starting StartPage application")
     notion = AsyncClient(auth=os.environ["NOTION_TOKEN"])
     page_id = os.environ.get("PAGE_ID")
-    city = os.environ.get("CITY")
     block_id = os.environ.get("BLOCK_ID")
-    if not city or not page_id or not block_id:
-        raise ValueError("CITY, PAGE_ID, and BLOCK_ID must be set")
+    if not page_id or not block_id:
+        raise ValueError("PAGE_ID and BLOCK_ID must be set")
 
     username = os.environ.get("ICLOUD_USERNAME")
     password = os.environ.get("ICLOUD_APP_PASSWORD")
@@ -109,7 +106,6 @@ async def main():
     banned_tags = {"sponsored", "advertisement", "government & policy", "smartglasses"}
 
     tasks = [
-        get_weather(city),
         get_currency_rates("Currencies (₽)", "rub", ["usd", "eur"]),
         get_currency_rates("Cryptocurrencies ($)", "usd", ["btc", "eth"]),
         get_icloud_calendar_events(
@@ -122,13 +118,10 @@ async def main():
     logger.info("Fetching data from all sources concurrently")
     results = await asyncio.gather(*tasks)
 
-    weather_block, currency_blocks, crypto_blocks, calendar_events, rss_block, fact = (
-        results
-    )
+    currency_blocks, crypto_blocks, calendar_events, rss_block, fact = results
 
     logger.info("All data fetched successfully, building Notion page")
-    children = [*weather_block]
-    children.extend(currency_blocks)
+    children = [*currency_blocks]
     children.extend(crypto_blocks)
     children.extend(calendar_events)
     children.extend(rss_block)
